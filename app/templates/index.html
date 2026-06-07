@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WildLens — Animal Classifier</title>
+  <style>
+    :root {
+      --green: #22c55e;
+      --green-dark: #16a34a;
+      --lime: #84cc16;
+      --bg: #0a1628;
+      --card: rgba(13, 25, 48, 0.88);
+      --border: rgba(34, 197, 94, 0.22);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Background ───────────────────────── */
+    .bg {
+      position: fixed; inset: 0; z-index: -2;
+      background:
+        radial-gradient(ellipse 60% 50% at 15% 10%, rgba(34,197,94,.12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 60% at 85% 90%, rgba(16,185,129,.08) 0%, transparent 60%),
+        linear-gradient(160deg, #0a1628 0%, #061a10 55%, #0a1628 100%);
+    }
+
+    /* ── Floating particles ───────────────── */
+    .particles { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+    .p { position: absolute; opacity: 0; animation: rise linear infinite; }
+    @keyframes rise {
+      0%   { transform: translateY(105vh) rotate(0deg); opacity: 0; }
+      8%   { opacity: .14; }
+      92%  { opacity: .14; }
+      100% { transform: translateY(-8vh) rotate(360deg); opacity: 0; }
+    }
+
+    /* ── Header ───────────────────────────── */
+    header { text-align: center; padding: 3rem 1rem 1rem; }
+    .logo-icon { font-size: 3.8rem; line-height: 1; display: block; margin-bottom: .4rem;
+      filter: drop-shadow(0 0 24px rgba(34,197,94,.5)); animation: breathe 3s ease-in-out infinite; }
+    @keyframes breathe {
+      0%,100% { filter: drop-shadow(0 0 18px rgba(34,197,94,.4)); }
+      50%      { filter: drop-shadow(0 0 32px rgba(34,197,94,.75)); }
+    }
+    h1 {
+      font-size: 2.6rem; font-weight: 800; letter-spacing: -.03em;
+      background: linear-gradient(130deg, #22c55e 0%, #84cc16 50%, #10b981 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .subtitle { color: var(--muted); font-size: 1.05rem; margin-top: .35rem; }
+    .badge {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.25);
+      border-radius: 99px; padding: .28rem .9rem; font-size: .78rem; color: var(--green);
+      margin-top: .7rem;
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+      box-shadow: 0 0 6px var(--green); animation: pulse 1.8s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+    /* ── Card ─────────────────────────────── */
+    .card {
+      max-width: 660px; margin: 2rem auto 1rem;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 24px; padding: 2rem;
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      box-shadow: 0 30px 60px -15px rgba(0,0,0,.7), 0 0 0 1px rgba(34,197,94,.04);
+    }
+
+    /* ── Tabs ─────────────────────────────── */
+    .tabs {
+      display: flex; gap: .4rem;
+      background: rgba(0,0,0,.35); border-radius: 14px; padding: 4px;
+      margin-bottom: 1.6rem;
+    }
+    .tab-btn {
+      flex: 1; padding: .72rem; border: none; background: transparent;
+      color: var(--muted); border-radius: 11px; cursor: pointer;
+      font-size: .92rem; font-weight: 600; transition: all .22s;
+      display: flex; align-items: center; justify-content: center; gap: .45rem;
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff; box-shadow: 0 4px 14px rgba(34,197,94,.35);
+    }
+    .tab-btn:hover:not(.active) { color: var(--text); background: rgba(255,255,255,.06); }
+
+    /* ── Drop zone ────────────────────────── */
+    .drop-zone {
+      border: 2px dashed rgba(34,197,94,.28); border-radius: 18px;
+      padding: 3rem 2rem; text-align: center; cursor: pointer;
+      transition: all .25s; position: relative; overflow: hidden;
+    }
+    .drop-zone:hover, .drop-zone.over {
+      border-color: var(--green); background: rgba(34,197,94,.06);
+    }
+    .drop-zone.over { transform: scale(1.012); }
+    .dz-icon { font-size: 2.8rem; display: block; margin-bottom: .9rem;
+      transition: transform .3s; }
+    .drop-zone:hover .dz-icon { transform: translateY(-4px) scale(1.08); }
+    .dz-title { font-size: 1.05rem; font-weight: 600; margin-bottom: .3rem; }
+    .dz-hint { font-size: .82rem; color: var(--muted); }
+    #file-input { display: none; }
+
+    /* ── Preview ──────────────────────────── */
+    .preview-wrap { display: none; margin-top: 1.4rem; position: relative; border-radius: 16px; overflow: hidden; }
+    .preview-wrap.show { display: block; animation: fadeUp .3s ease-out; }
+    .preview-img { width: 100%; max-height: 310px; object-fit: contain;
+      border-radius: 14px; border: 1px solid rgba(34,197,94,.2); background: rgba(0,0,0,.4); }
+    .overlay-btn {
+      position: absolute; top: .7rem; right: .7rem;
+      background: rgba(0,0,0,.72); border: 1px solid rgba(255,255,255,.18);
+      color: #fff; padding: .35rem .75rem; border-radius: 8px; cursor: pointer;
+      font-size: .78rem; backdrop-filter: blur(4px); transition: all .2s;
+    }
+    .overlay-btn:hover { border-color: rgba(34,197,94,.5); background: rgba(0,0,0,.9); }
+
+    /* ── Camera ───────────────────────────── */
+    .cam-section { display: none; }
+    .cam-start-box {
+      border: 2px dashed rgba(34,197,94,.28); border-radius: 18px;
+      padding: 2.5rem 2rem; text-align: center;
+    }
+    .cam-start-box .dz-icon { font-size: 2.8rem; margin-bottom: .9rem; }
+    .cam-view { display: none; border-radius: 16px; overflow: hidden;
+      border: 2px solid rgba(34,197,94,.3); background: #000; position: relative; }
+    #cam-video { width: 100%; max-height: 340px; object-fit: cover; display: block; }
+    #cam-canvas { display: none; }
+    .scan-line {
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(34,197,94,.7), transparent);
+      animation: scan 2.5s ease-in-out infinite; pointer-events: none;
+    }
+    @keyframes scan { 0%,100% { top: 10%; } 50% { top: 85%; } }
+    .cam-controls {
+      display: flex; align-items: center; justify-content: center;
+      gap: .9rem; margin-top: 1rem; flex-wrap: wrap;
+    }
+    .cam-action {
+      padding: .6rem 1.2rem; border: none; border-radius: 10px; cursor: pointer;
+      font-size: .88rem; font-weight: 600; transition: all .2s; display: flex;
+      align-items: center; gap: .4rem;
+    }
+    .btn-start { background: linear-gradient(135deg,#22c55e,#16a34a); color: #fff;
+      box-shadow: 0 4px 12px rgba(34,197,94,.3); }
+    .btn-stop  { background: rgba(255,255,255,.08); color: var(--muted); border: 1px solid rgba(255,255,255,.12); }
+    .btn-stop:hover { color: var(--text); background: rgba(255,255,255,.13); }
+    .capture-ring {
+      width: 62px; height: 62px; border-radius: 50%;
+      background: linear-gradient(135deg,#22c55e,#16a34a);
+      border: 3px solid #fff; cursor: pointer; display: none;
+      align-items: center; justify-content: center; font-size: 1.4rem;
+      box-shadow: 0 4px 20px rgba(34,197,94,.55); transition: all .2s;
+    }
+    .capture-ring:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(34,197,94,.75); }
+    .capture-ring:active { transform: scale(.94); }
+    .cam-hint { text-align: center; font-size: .83rem; color: var(--muted); margin-top: .6rem; }
+
+    /* ── Classify btn ─────────────────────── */
+    .classify-btn {
+      width: 100%; padding: 1rem; margin-top: 1.4rem;
+      background: linear-gradient(135deg,#22c55e,#16a34a);
+      border: none; border-radius: 14px; color: #fff;
+      font-size: 1.05rem; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: .55rem;
+      transition: all .25s; box-shadow: 0 4px 16px rgba(34,197,94,.3);
+    }
+    .classify-btn:hover:not(:disabled) {
+      transform: translateY(-2px); box-shadow: 0 8px 26px rgba(34,197,94,.52);
+    }
+    .classify-btn:active:not(:disabled) { transform: translateY(0); }
+    .classify-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .spinner {
+      display: none; width: 20px; height: 20px; border-radius: 50%;
+      border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff;
+      animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Results ──────────────────────────── */
+    .results { display: none; margin-top: 1.8rem; }
+    .results.show { display: block; animation: fadeUp .4s ease-out; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .top-result {
+      display: flex; align-items: center; gap: 1rem;
+      background: rgba(34,197,94,.07); border: 1px solid rgba(34,197,94,.18);
+      border-radius: 16px; padding: 1.1rem 1.3rem; margin-bottom: 1rem;
+    }
+    .top-emoji { font-size: 3.2rem; line-height: 1; }
+    .top-name { font-size: 1.55rem; font-weight: 800; text-transform: capitalize; color: var(--green); }
+    .top-pct  { font-size: .88rem; color: var(--muted); margin-top: .15rem; }
+
+    /* confidence level indicator */
+    .conf-badge {
+      margin-left: auto; padding: .35rem .7rem; border-radius: 8px;
+      font-size: .78rem; font-weight: 700; flex-shrink: 0;
+    }
+    .conf-high   { background: rgba(34,197,94,.15); color: #4ade80; }
+    .conf-medium { background: rgba(234,179,8,.12);  color: #fbbf24; }
+    .conf-low    { background: rgba(239,68,68,.12);  color: #f87171; }
+
+    .others-label {
+      font-size: .75rem; text-transform: uppercase; letter-spacing: .1em;
+      color: var(--muted); margin-bottom: .8rem;
+    }
+    .pred-row {
+      display: flex; align-items: center; gap: .75rem; margin-bottom: .7rem;
+      animation: slideIn .3s ease-out both;
+    }
+    .pred-row:nth-child(1) { animation-delay: .06s; }
+    .pred-row:nth-child(2) { animation-delay: .12s; }
+    .pred-row:nth-child(3) { animation-delay: .18s; }
+    .pred-row:nth-child(4) { animation-delay: .24s; }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    .pred-em { font-size: 1.25rem; width: 2rem; text-align: center; flex-shrink: 0; }
+    .pred-meta { flex: 1; }
+    .pred-name { font-size: .92rem; font-weight: 600; text-transform: capitalize; margin-bottom: .22rem; }
+    .bar-track { background: rgba(255,255,255,.06); border-radius: 99px; height: 5px; overflow: hidden; }
+    .bar-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg,#22c55e,#84cc16);
+      width: 0; transition: width .75s cubic-bezier(.34,1.56,.64,1);
+    }
+    .pred-pct { font-size: .83rem; font-weight: 700; color: var(--green); min-width: 3.5rem; text-align: right; }
+
+    /* ── Error ────────────────────────────── */
+    .error {
+      display: none; margin-top: 1rem;
+      background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+      border-radius: 10px; padding: .9rem 1rem; color: #fca5a5; font-size: .88rem;
+    }
+    .error.show { display: block; animation: fadeUp .3s ease-out; }
+
+    /* ── Divider ──────────────────────────── */
+    .divider { height: 1px; margin: .9rem 0;
+      background: linear-gradient(90deg,transparent,rgba(34,197,94,.25),transparent); }
+
+    /* ── Footer ───────────────────────────── */
+    footer { text-align: center; padding: 1.5rem 1rem 2.5rem; color: var(--muted); font-size: .82rem; }
+
+    /* ── Responsive ───────────────────────── */
+    @media (max-width: 640px) {
+      .card { margin: 1rem; padding: 1.4rem; }
+      h1 { font-size: 2rem; }
+      .top-emoji { font-size: 2.5rem; }
+      .top-name  { font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="particles" id="pts"></div>
+
+  <header>
+    <span class="logo-icon">🦁</span>
+    <h1>WildLens</h1>
+    <p class="subtitle">AI-powered animal recognition · 90 species</p>
+    <div class="badge"><div class="badge-dot"></div>EfficientNet B2 · Live</div>
+  </header>
+
+  <main>
+    <div class="card">
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" id="tab-upload" onclick="switchTab('upload')">📁 Upload Image</button>
+        <button class="tab-btn"        id="tab-camera" onclick="switchTab('camera')">📷 Live Camera</button>
+      </div>
+
+      <!-- Upload -->
+      <div id="sec-upload">
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <span class="dz-icon">🐾</span>
+          <p class="dz-title">Drop an animal photo here</p>
+          <p class="dz-hint">or click to browse — JPG, PNG, WEBP</p>
+        </div>
+        <input type="file" id="file-input" accept="image/*" onchange="onFileChange(this)">
+        <div class="preview-wrap" id="up-preview">
+          <img class="preview-img" id="up-img" src="" alt="Preview">
+          <button class="overlay-btn" onclick="resetUpload()">✕ Change</button>
+        </div>
+      </div>
+
+      <!-- Camera -->
+      <div class="cam-section" id="sec-camera">
+        <div class="cam-start-box" id="cam-start-box">
+          <div class="dz-icon">📷</div>
+          <p class="dz-title" style="margin-bottom:.3rem">Camera Capture</p>
+          <p class="dz-hint">Point at an animal and capture in real time</p>
+        </div>
+        <div class="cam-view" id="cam-view">
+          <video id="cam-video" autoplay playsinline muted></video>
+          <canvas id="cam-canvas"></canvas>
+          <div class="scan-line" id="scan-line"></div>
+        </div>
+        <div class="cam-controls">
+          <button class="cam-action btn-start" id="btn-start-cam" onclick="startCam()">📷 Start Camera</button>
+          <button class="capture-ring"         id="btn-capture"   onclick="capture()">🎯</button>
+          <button class="cam-action btn-stop"  id="btn-stop-cam"  onclick="stopCam()" style="display:none">⏹ Stop</button>
+        </div>
+        <p class="cam-hint" id="cam-hint">Start your camera to capture an animal photo</p>
+        <div class="preview-wrap" id="cam-preview">
+          <img class="preview-img" id="cam-img" src="" alt="Captured">
+          <button class="overlay-btn" onclick="retake()">↺ Retake</button>
+        </div>
+      </div>
+
+      <!-- Classify -->
+      <button class="classify-btn" id="classify-btn" onclick="classify()" disabled>
+        <div class="spinner" id="spinner"></div>
+        <span id="btn-label">🔍 Classify Animal</span>
+      </button>
+
+      <div class="error" id="error-box"></div>
+
+      <!-- Results -->
+      <div class="results" id="results">
+        <div class="top-result">
+          <span class="top-emoji" id="r-emoji">🐾</span>
+          <div>
+            <div class="top-name" id="r-name">Animal</div>
+            <div class="top-pct"  id="r-pct">—</div>
+          </div>
+          <div class="conf-badge" id="r-badge"></div>
+        </div>
+        <div class="divider"></div>
+        <p class="others-label">Other possibilities</p>
+        <div id="r-others"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer>🌿 Powered by EfficientNet B2 · Trained on 90 animal species from around the world</footer>
+
+  <script>
+    /* ── Particles ─────────────────────────────────── */
+    const PARTS = ['🐾','🌿','🍃','🌱','🦋','🌊','🐾','🍀'];
+    const ptsEl = document.getElementById('pts');
+    for (let i = 0; i < 22; i++) {
+      const d = document.createElement('div');
+      d.className = 'p';
+      d.textContent = PARTS[i % PARTS.length];
+      d.style.cssText = `left:${Math.random()*100}vw;font-size:${.9+Math.random()*.9}rem;` +
+        `animation-duration:${9+Math.random()*13}s;animation-delay:${-Math.random()*22}s`;
+      ptsEl.appendChild(d);
+    }
+
+    /* ── State ─────────────────────────────────────── */
+    let tab        = 'upload';
+    let uploadFile = null;
+    let captureBlob= null;
+    let camStream  = null;
+
+    /* ── Tab switch ─────────────────────────────────── */
+    function switchTab(t) {
+      tab = t;
+      document.getElementById('tab-upload').classList.toggle('active', t === 'upload');
+      document.getElementById('tab-camera').classList.toggle('active', t === 'camera');
+      document.getElementById('sec-upload').style.display = t === 'upload' ? 'block' : 'none';
+      document.getElementById('sec-camera').style.display = t === 'camera' ? 'block' : 'none';
+      hideResults(); hideError();
+      if (t === 'upload') { stopCam(); }
+      else { captureBlob = null; document.getElementById('cam-preview').classList.remove('show'); }
+      refreshBtn();
+    }
+
+    /* ── Upload / drag-drop ─────────────────────────── */
+    const dz = document.getElementById('drop-zone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('over');
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith('image/')) loadFile(f);
+    });
+
+    function onFileChange(el) { if (el.files[0]) loadFile(el.files[0]); }
+
+    function loadFile(f) {
+      uploadFile = f;
+      const r = new FileReader();
+      r.onload = e => {
+        document.getElementById('up-img').src = e.target.result;
+        document.getElementById('up-preview').classList.add('show');
+      };
+      r.readAsDataURL(f);
+      hideResults(); hideError(); refreshBtn();
+    }
+
+    function resetUpload() {
+      uploadFile = null;
+      document.getElementById('file-input').value = '';
+      document.getElementById('up-preview').classList.remove('show');
+      hideResults(); refreshBtn();
+    }
+
+    /* ── Camera ─────────────────────────────────────── */
+    async function startCam() {
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        const v = document.getElementById('cam-video');
+        v.srcObject = camStream;
+        document.getElementById('cam-start-box').style.display = 'none';
+        document.getElementById('cam-view').style.display = 'block';
+        document.getElementById('btn-capture').style.display = 'flex';
+        document.getElementById('btn-stop-cam').style.display = 'flex';
+        document.getElementById('btn-start-cam').style.display = 'none';
+        document.getElementById('cam-hint').textContent = 'Point at an animal and press 🎯 to capture';
+        captureBlob = null;
+        document.getElementById('cam-preview').classList.remove('show');
+        refreshBtn();
+      } catch {
+        document.getElementById('cam-hint').textContent = '⚠️ Camera access denied or unavailable';
+      }
+    }
+
+    function stopCam() {
+      if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+      document.getElementById('cam-view').style.display = 'none';
+      document.getElementById('cam-start-box').style.display = 'block';
+      document.getElementById('btn-capture').style.display = 'none';
+      document.getElementById('btn-stop-cam').style.display = 'none';
+      document.getElementById('btn-start-cam').style.display = 'flex';
+      document.getElementById('cam-hint').textContent = 'Start your camera to capture an animal photo';
+    }
+
+    function capture() {
+      const v = document.getElementById('cam-video');
+      const c = document.getElementById('cam-canvas');
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext('2d').drawImage(v, 0, 0);
+      c.toBlob(blob => {
+        captureBlob = blob;
+        document.getElementById('cam-img').src = URL.createObjectURL(blob);
+        document.getElementById('cam-preview').classList.add('show');
+        stopCam(); refreshBtn(); hideResults(); hideError();
+      }, 'image/jpeg', 0.95);
+    }
+
+    function retake() {
+      captureBlob = null;
+      document.getElementById('cam-preview').classList.remove('show');
+      refreshBtn(); startCam();
+    }
+
+    /* ── Classify ───────────────────────────────────── */
+    function refreshBtn() {
+      const ready = (tab === 'upload' && uploadFile) || (tab === 'camera' && captureBlob);
+      document.getElementById('classify-btn').disabled = !ready;
+    }
+
+    async function classify() {
+      const blob = tab === 'upload' ? uploadFile : captureBlob;
+      if (!blob) return;
+
+      const btn     = document.getElementById('classify-btn');
+      const spinner = document.getElementById('spinner');
+      const label   = document.getElementById('btn-label');
+
+      btn.disabled = true;
+      spinner.style.display = 'block';
+      label.textContent = 'Analyzing…';
+      hideResults(); hideError();
+
+      try {
+        const fd = new FormData();
+        fd.append('image', blob, 'animal.jpg');
+        const res  = await fetch('/predict', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        showResults(data.predictions);
+      } catch (e) {
+        showError(e.message || 'Classification failed. Please try again.');
+      } finally {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        label.textContent = '🔍 Classify Animal';
+        refreshBtn();
+      }
+    }
+
+    /* ── Results ────────────────────────────────────── */
+    function showResults(preds) {
+      const top = preds[0];
+      document.getElementById('r-emoji').textContent = top.emoji;
+      document.getElementById('r-name').textContent  = top.label;
+      document.getElementById('r-pct').textContent   = `Confidence: ${top.confidence.toFixed(1)}%`;
+
+      const badge = document.getElementById('r-badge');
+      if (top.confidence >= 75) {
+        badge.className = 'conf-badge conf-high';   badge.textContent = '✓ High';
+      } else if (top.confidence >= 40) {
+        badge.className = 'conf-badge conf-medium'; badge.textContent = '~ Medium';
+      } else {
+        badge.className = 'conf-badge conf-low';    badge.textContent = '? Low';
+      }
+
+      const el = document.getElementById('r-others');
+      el.innerHTML = '';
+      preds.slice(1).forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'pred-row';
+        row.innerHTML = `
+          <span class="pred-em">${p.emoji}</span>
+          <div class="pred-meta">
+            <div class="pred-name">${p.label}</div>
+            <div class="bar-track"><div class="bar-fill" data-w="${p.confidence}"></div></div>
+          </div>
+          <span class="pred-pct">${p.confidence.toFixed(1)}%</span>`;
+        el.appendChild(row);
+      });
+
+      document.getElementById('results').classList.add('show');
+
+      // animate bars on next frame
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.querySelectorAll('.bar-fill').forEach(b => { b.style.width = b.dataset.w + '%'; });
+      }));
+    }
+
+    function hideResults() { document.getElementById('results').classList.remove('show'); }
+    function showError(msg) {
+      const e = document.getElementById('error-box');
+      e.textContent = '⚠️ ' + msg; e.classList.add('show');
+    }
+    function hideError() { document.getElementById('error-box').classList.remove('show'); }
+  </script>
+</body>
+</html>
